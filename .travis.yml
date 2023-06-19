@@ -1,11 +1,44 @@
 os: linux
-dist: xenial
-language: python
+arch: arm64-graviton2
 python: '2.7'
+dist: xenial
+group: edge
+
+env:
+  - CODECOV_TOKEN: '"144571bf-2161-489b-821c-c64ec59bf524"'
+  - LOCAL_PG: '"True"'
+  - CYPRESS_LOCAL_PG: '"True"'
+
+cache:
+  pip: true
+  directories:
+    - "~/.npm"
+    - "~/.cache"
+
+addons:
+  postgresql: '12'
+
+services:
+  - postgresql
+
 before_install:
-  - pip install --upgrade pip
-  - pip install "isort[colors]"
+  - source tests/ci/helper_scripts/test_picker.sh --cypress
+  - travis_retry ./tests/ci/helper_scripts/before_install_all.sh
+  - travis_retry ./tests/ci/helper_scripts/before_install_server.sh
+  - travis_retry ./tests/ci/helper_scripts/before_install_frontend.sh
+
 install:
-  - mkdir /code
+  - travis_retry ./tests/ci/helper_scripts/install_backend.sh
+  - travis_retry ./tests/ci/helper_scripts/install_frontend.sh
+  - travis_retry ./tests/ci/helper_scripts/install_cypress.sh
+
+before_script:
+  - "./tests/ci/helper_scripts/before_script_postgres.sh"
+  - "./tests/ci/helper_scripts/before_script_cypress.sh"
+
 script:
-  - echo "Running script..."
+  - "./tests/ci/helper_scripts/script_cypress.sh"
+  - "task lint:backend:ci -- $(git diff --name-only --diff-filter=ACMR $TRAVIS_COMMIT_RANGE | sed 's| |\\ |g' | grep '\.py$' | grep -v 'production_secrets.py')"
+
+before_cache:
+  - rm -f $HOME/.cache/pip/log/debug.log
